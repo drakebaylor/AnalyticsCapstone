@@ -1,4 +1,4 @@
-from src.data.clean_data import get_batters_df, get_pitchers_df
+from src.data.clean_data import get_batters_df_normalized, get_pitchers_df_normalized
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
@@ -7,25 +7,8 @@ from sklearn.model_selection import train_test_split
 import joblib
 
 def train_models():
-    batters_df = get_batters_df()
-    pitchers_df = get_pitchers_df()
-
-    # Normalize batters_df
-    batters_numeric = batters_df.select_dtypes(include=['Int64', 'float'])
-    batters_non_numeric = batters_df.select_dtypes(exclude=['Int64', 'float'])
-    batters_normalized_numeric = (batters_numeric - batters_numeric.min()) / (batters_numeric.max() - batters_numeric.min())
-    batters_normalized = pd.concat([batters_normalized_numeric, batters_non_numeric.reset_index(drop=True)], axis=1)
-
-    # Normalize pitchers_df
-    pitchers_numeric = pitchers_df.select_dtypes(include=['Int64', 'float'])
-    pitchers_non_numeric = pitchers_df.select_dtypes(exclude=['Int64', 'float'])
-    pitchers_normalized_numeric = (pitchers_numeric - pitchers_numeric.min()) / (pitchers_numeric.max() - pitchers_numeric.min())
-    pitchers_normalized = pd.concat([pitchers_normalized_numeric, pitchers_non_numeric.reset_index(drop=True)], axis=1)
-
-    # Drop the year column
-    batters_normalized_numeric = batters_normalized_numeric.drop(columns=['year'])
-    pitchers_normalized_numeric = pitchers_normalized_numeric.drop(columns=['year'])
-    pitchers_normalized_numeric = pitchers_normalized_numeric.dropna()
+    batters_normalized_numeric = get_batters_df_normalized()
+    pitchers_normalized_numeric = get_pitchers_df_normalized()
 
     # Define features and target variable
     # We'll predict 'b_war' using all other numeric columns except 'b_war' itself

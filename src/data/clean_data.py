@@ -39,17 +39,42 @@ def get_dataframes():
         meta = soup.find(id="meta")
         for p in meta.find_all("p"):
             if "Contract Status" in p.text:
-                # Extract salary value using regex
+                # Extract salary and contract length using regex
                 import re
                 contract_text = p.text
-                # Look for salary pattern like $20.5M or $15.2M
-                salary_match = re.search(r'\$(\d+\.?\d*[MBk]?)', contract_text)
-                if salary_match:
-                    salary = salary_match.group(1)  # Get just the value without the $
-                    print(f"Salary: ${salary}")
+                # Look for contract pattern like '5 yr/$300M', '5 yrs/$300M', or just '$20.5M'
+                contract_match = re.search(r'(\d+) yr[s]?/\$(\d+\.?\d*[MBk]?)', contract_text)
+                if contract_match:
+                    years = int(contract_match.group(1))
+                    total_salary = contract_match.group(2)
+                    # Convert total_salary to float
+                    if total_salary.endswith('M'):
+                        total_salary_val = float(total_salary[:-1]) * 1_000_000
+                    elif total_salary.endswith('k'):
+                        total_salary_val = float(total_salary[:-1]) * 1_000
+                    elif total_salary.endswith('B'):
+                        total_salary_val = float(total_salary[:-1]) * 1_000_000_000
+                    else:
+                        total_salary_val = float(total_salary)
+                    salary = total_salary_val / years
+                    print(f"Contract: {years} yr, Total: ${total_salary}, Annual Salary: ${salary:,.0f}")
                 else:
-                    print("No salary found in contract status")
-                    salary = 0
+                    # Fallback: Look for salary pattern like $20.5M or $15.2M
+                    salary_match = re.search(r'\$(\d+\.?\d*[MBk]?)', contract_text)
+                    if salary_match:
+                        salary = salary_match.group(1)
+                        if salary.endswith('M'):
+                            salary = float(salary[:-1]) * 1_000_000
+                        elif salary.endswith('k'):
+                            salary = float(salary[:-1]) * 1_000
+                        elif salary.endswith('B'):
+                            salary = float(salary[:-1]) * 1_000_000_000
+                        else:
+                            salary = float(salary)
+                        print(f"Salary: ${salary:,.0f}")
+                    else:
+                        print("No salary found in contract status")
+                        salary = 0
 
             # Find the table wrapper for pitching
         div = soup.find(id="div_players_standard_pitching")
@@ -64,7 +89,7 @@ def get_dataframes():
                     stat_name = cell.get("data-stat")
                     stat_value = cell.text.strip()
                     stats_dict[stat_name] = stat_value
-                    stats_dict['salary'] = salary
+                stats_dict['salary'] = salary
                 df = pd.DataFrame([stats_dict])
                 pitchers_df = pd.concat([pitchers_df, df], ignore_index=True)
             else:
@@ -85,7 +110,7 @@ def get_dataframes():
                     stat_name = cell.get("data-stat")
                     stat_value = cell.text.strip()
                     stats_dict[stat_name] = stat_value
-                    stats_dict['salary'] = salary
+                stats_dict['salary'] = salary
                 df = pd.DataFrame([stats_dict])
                 batters_df = pd.concat([batters_df, df], ignore_index=True)
             else:
@@ -111,14 +136,14 @@ def get_dataframes():
     # Save pitchers dataframe to database
     if not pitchers_df.empty:
         pitchers_df = load_and_fix_dtypes(pitchers_df)
-        pitchers_df = pitchers_df.drop(columns=['age', 'awards'])
+        pitchers_df = pitchers_df.drop(columns=['awards'])
         pitchers_df.to_sql('pitchers', conn, if_exists='replace', index=False)
         print(f"Saved {len(pitchers_df)} pitcher records to database")
 
-    # Save batters dataframe to database  
+    # Save batters dataframe to database 
     if not batters_df.empty:
         batters_df = load_and_fix_dtypes(batters_df)
-        batters_df = batters_df.drop(columns=['age', 'awards'])
+        batters_df = batters_df.drop(columns=['awards'])
         batters_df.to_sql('batters', conn, if_exists='replace', index=False)
         print(f"Saved {len(batters_df)} batter records to database")
 
@@ -129,15 +154,33 @@ def get_dataframes():
 def get_batters_df():
     conn = sqlite3.connect('data/processed/baseball_stats.db')
     batters_df = pd.read_sql_query("SELECT * FROM batters WHERE salary > 0", conn)
+    batters_df = batters_df.drop(columns=['year'])
     conn.close()
     return batters_df
 
 def get_pitchers_df():
     conn = sqlite3.connect('data/processed/baseball_stats.db')
     pitchers_df = pd.read_sql_query("SELECT * FROM pitchers WHERE salary > 0", conn)
+    pitchers_df = pitchers_df.drop(columns=['year'])
+    pitchers_df = pitchers_df.dropna()
     conn.close()
     return pitchers_df
 
+def get_batters_df_normalized():
+    batters_df = get_batters_df()
+    batters_numeric = batters_df.select_dtypes(include=['Int64', 'float'])
+    batters_non_numeric = batters_df.select_dtypes(exclude=['Int64', 'float'])
+    batters_normalized_numeric = (batters_numeric - batters_numeric.min()) / (batters_numeric.max() - batters_numeric.min())
+    batters_normalized = pd.concat([batters_normalized_numeric, batters_non_numeric.reset_index(drop=True)], axis=1)
+    return batters_normalized_numeric
+
+def get_pitchers_df_normalized():
+    pitchers_df = get_pitchers_df()
+    pitchers_numeric = pitchers_df.select_dtypes(include=['Int64', 'float'])
+    pitchers_non_numeric = pitchers_df.select_dtypes(exclude=['Int64', 'float'])
+    pitchers_normalized_numeric = (pitchers_numeric - pitchers_numeric.min()) / (pitchers_numeric.max() - pitchers_numeric.min())
+    pitchers_normalized = pd.concat([pitchers_normalized_numeric, pitchers_non_numeric.reset_index(drop=True)], axis=1)
+    return pitchers_normalized_numeric
 
 def load_and_fix_dtypes(df):
     """
