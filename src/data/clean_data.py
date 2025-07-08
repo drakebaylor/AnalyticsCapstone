@@ -1,9 +1,24 @@
+"""
+Data cleaning and database creation for baseball player stats.
+- Parses raw HTML player files
+- Extracts salary, batting, and pitching stats
+- Saves processed data to SQLite database
+- Provides functions to load and normalize dataframes
+"""
+
 import os
 import pandas as pd
 import sqlite3
+import re
 from bs4 import BeautifulSoup
 
+# ----------------------
+# Main Data Extraction
+# ----------------------
 def get_dataframes():
+    """
+    Parses all HTML files in data/raw, extracts player stats and salary, and saves to SQLite DB.
+    """
     files = []
     path = 'data/raw'
     
@@ -11,6 +26,7 @@ def get_dataframes():
         print(f"Directory '{path}' does not exist. Please run load_data.py first to download the files.")
         return
     
+    # Gather all HTML files in the raw data directory
     for filename in os.listdir(path):
         full_path = os.path.join(path, filename)
         if os.path.isfile(full_path):
@@ -35,55 +51,62 @@ def get_dataframes():
         # Parse the HTML
         soup = BeautifulSoup(html_content, "html.parser")
 
-        # Find the player's salary
+        # -----------
+        # Salary Extraction
+        # -----------
+        salary = 0
         meta = soup.find(id="meta")
-        for p in meta.find_all("p"):
-            if "Contract Status" in p.text:
-                # Extract salary and contract length using regex
-                import re
-                contract_text = p.text
-                # Look for contract pattern like '5 yr/$300M', '5 yrs/$300M', or just '$20.5M'
-                contract_match = re.search(r'(\d+) yr[s]?/\$(\d+\.?\d*[MBk]?)', contract_text)
-                if contract_match:
-                    years = int(contract_match.group(1))
-                    total_salary = contract_match.group(2)
-                    # Convert total_salary to float
-                    if total_salary.endswith('M'):
-                        total_salary_val = float(total_salary[:-1]) * 1_000_000
-                    elif total_salary.endswith('k'):
-                        total_salary_val = float(total_salary[:-1]) * 1_000
-                    elif total_salary.endswith('B'):
-                        total_salary_val = float(total_salary[:-1]) * 1_000_000_000
-                    else:
-                        total_salary_val = float(total_salary)
-                    salary = total_salary_val / years
-                    print(f"Contract: {years} yr, Total: ${total_salary}, Annual Salary: ${salary:,.0f}")
-                else:
-                    # Fallback: Look for salary pattern like $20.5M or $15.2M
-                    salary_match = re.search(r'\$(\d+\.?\d*[MBk]?)', contract_text)
-                    if salary_match:
-                        salary = salary_match.group(1)
-                        if salary.endswith('M'):
-                            salary = float(salary[:-1]) * 1_000_000
-                        elif salary.endswith('k'):
-                            salary = float(salary[:-1]) * 1_000
-                        elif salary.endswith('B'):
-                            salary = float(salary[:-1]) * 1_000_000_000
+        if meta:
+            for p in meta.find_all("p"):
+                if "Contract Status" in p.text:
+                    contract_text = p.text
+                    # Look for contract pattern like '5 yr/$300M', '5 yrs/$300M', or just '$20.5M'
+                    contract_match = re.search(r'(\d+) yr[s]?/\$(\d+\.?\d*[MBk]?)', contract_text)
+                    if contract_match:
+                        years = int(contract_match.group(1))
+                        total_salary = contract_match.group(2)
+                        # Convert total_salary to float
+                        if total_salary.endswith('M'):
+                            total_salary_val = float(total_salary[:-1]) * 1_000_000
+                        elif total_salary.endswith('k'):
+                            total_salary_val = float(total_salary[:-1]) * 1_000
+                        elif total_salary.endswith('B'):
+                            total_salary_val = float(total_salary[:-1]) * 1_000_000_000
                         else:
-                            salary = float(salary)
-                        print(f"Salary: ${salary:,.0f}")
+                            total_salary_val = float(total_salary)
+                        salary = total_salary_val / years
+                        print(f"Contract: {years} yr, Total: ${total_salary}, Annual Salary: ${salary:,.0f}")
                     else:
-                        print("No salary found in contract status")
-                        salary = 0
-
-            # Find the table wrapper for pitching
+                        # Fallback: Look for salary pattern like $20.5M or $15.2M
+                        salary_match = re.search(r'\$(\d+\.?\d*[MBk]?)', contract_text)
+                        if salary_match:
+                            salary = salary_match.group(1)
+                            if salary.endswith('M'):
+                                salary = float(salary[:-1]) * 1_000_000
+                            elif salary.endswith('k'):
+                                salary = float(salary[:-1]) * 1_000
+                            elif salary.endswith('B'):
+                                salary = float(salary[:-1]) * 1_000_000_000
+                            else:
+                                salary = float(salary)
+                            print(f"Salary: ${salary:,.0f}")
+                        else:
+                            print("No salary found in contract status")
+                            salary = 0
+        # -----------
+        # Pitching Stats Extraction
+        # -----------
         div = soup.find(id="div_players_standard_pitching")
         if div:
             row = div.find(id="players_standard_pitching.2024")
             if row:
                 stats_dict = {}
                 stats_dict['fullName'] = player_name
-                year = row.find("th", {"data-stat": "year_id"}).text.strip()
+                year_th = row.find("th", {"data-stat": "year_id"})
+                if year_th:
+                    year = year_th.text.strip()
+                else:
+                    year = None
                 stats_dict["year"] = year
                 for cell in row.find_all("td"):
                     stat_name = cell.get("data-stat")
@@ -97,14 +120,20 @@ def get_dataframes():
         else:
             print("Pitching table not found.")
         
-        # Now handle batting
+        # -----------
+        # Batting Stats Extraction
+        # -----------
         div = soup.find(id="div_players_standard_batting")
         if div:
             row = div.find(id="players_standard_batting.2024")
             if row:
                 stats_dict = {}
                 stats_dict['fullName'] = player_name
-                year = row.find("th", {"data-stat": "year_id"}).text.strip()
+                year_th = row.find("th", {"data-stat": "year_id"})
+                if year_th:
+                    year = year_th.text.strip()
+                else:
+                    year = None
                 stats_dict["year"] = year
                 for cell in row.find_all("td"):
                     stat_name = cell.get("data-stat")
@@ -118,12 +147,11 @@ def get_dataframes():
         else:
             print("Batting table not found.")
 
-
-    # Create database directory if it doesn't exist
+    # ----------------------
+    # Save to SQLite Database
+    # ----------------------
     db_dir = 'data/processed'
     os.makedirs(db_dir, exist_ok=True)
-
-    # Create database connection
     db_path = os.path.join(db_dir, 'baseball_stats.db')
     
     # Delete existing database if it exists
@@ -136,14 +164,16 @@ def get_dataframes():
     # Save pitchers dataframe to database
     if not pitchers_df.empty:
         pitchers_df = load_and_fix_dtypes(pitchers_df)
-        pitchers_df = pitchers_df.drop(columns=['awards'])
+        if 'awards' in pitchers_df.columns:
+            pitchers_df = pitchers_df.drop(columns=['awards'])
         pitchers_df.to_sql('pitchers', conn, if_exists='replace', index=False)
         print(f"Saved {len(pitchers_df)} pitcher records to database")
 
     # Save batters dataframe to database 
     if not batters_df.empty:
         batters_df = load_and_fix_dtypes(batters_df)
-        batters_df = batters_df.drop(columns=['awards'])
+        if 'awards' in batters_df.columns:
+            batters_df = batters_df.drop(columns=['awards'])
         batters_df.to_sql('batters', conn, if_exists='replace', index=False)
         print(f"Saved {len(batters_df)} batter records to database")
 
@@ -151,37 +181,70 @@ def get_dataframes():
     conn.close()
     print(f"Database saved to: {db_path}")
 
+    # Save DataFrames to CSV
+    batters_csv_path = os.path.join(db_dir, 'batters.csv')
+    pitchers_csv_path = os.path.join(db_dir, 'pitchers.csv')
+    batters_df.to_csv(batters_csv_path, index=False)
+    print(f"Batters DataFrame saved to: {batters_csv_path}")
+    pitchers_df.to_csv(pitchers_csv_path, index=False)
+    print(f"Pitchers DataFrame saved to: {pitchers_csv_path}")
+
+# ----------------------
+# DataFrame Loaders
+# ----------------------
 def get_batters_df():
+    """
+    Loads batters table from SQLite database, drops 'year' column, and returns DataFrame.
+    """
     conn = sqlite3.connect('data/processed/baseball_stats.db')
     batters_df = pd.read_sql_query("SELECT * FROM batters WHERE salary > 0", conn)
-    batters_df = batters_df.drop(columns=['year'])
+    if 'year' in batters_df.columns:
+        batters_df = batters_df.drop(columns=['year'])
     conn.close()
     return batters_df
 
 def get_pitchers_df():
+    """
+    Loads pitchers table from SQLite database, drops 'year' column, drops NA, and returns DataFrame.
+    """
     conn = sqlite3.connect('data/processed/baseball_stats.db')
     pitchers_df = pd.read_sql_query("SELECT * FROM pitchers WHERE salary > 0", conn)
-    pitchers_df = pitchers_df.drop(columns=['year'])
+    if 'year' in pitchers_df.columns:
+        pitchers_df = pitchers_df.drop(columns=['year'])
     pitchers_df = pitchers_df.dropna()
     conn.close()
     return pitchers_df
 
+# ----------------------
+# Normalization Helpers
+# ----------------------
 def get_batters_df_normalized():
+    """
+    Returns normalized numeric columns of batters DataFrame (min-max scaling).
+    """
     batters_df = get_batters_df()
     batters_numeric = batters_df.select_dtypes(include=['Int64', 'float'])
     batters_non_numeric = batters_df.select_dtypes(exclude=['Int64', 'float'])
     batters_normalized_numeric = (batters_numeric - batters_numeric.min()) / (batters_numeric.max() - batters_numeric.min())
-    batters_normalized = pd.concat([batters_normalized_numeric, batters_non_numeric.reset_index(drop=True)], axis=1)
+    # Optionally, you can return the full DataFrame with non-numeric columns
+    # batters_normalized = pd.concat([batters_normalized_numeric, batters_non_numeric.reset_index(drop=True)], axis=1)
     return batters_normalized_numeric
 
 def get_pitchers_df_normalized():
+    """
+    Returns normalized numeric columns of pitchers DataFrame (min-max scaling).
+    """
     pitchers_df = get_pitchers_df()
     pitchers_numeric = pitchers_df.select_dtypes(include=['Int64', 'float'])
     pitchers_non_numeric = pitchers_df.select_dtypes(exclude=['Int64', 'float'])
     pitchers_normalized_numeric = (pitchers_numeric - pitchers_numeric.min()) / (pitchers_numeric.max() - pitchers_numeric.min())
-    pitchers_normalized = pd.concat([pitchers_normalized_numeric, pitchers_non_numeric.reset_index(drop=True)], axis=1)
+    # Optionally, you can return the full DataFrame with non-numeric columns
+    # pitchers_normalized = pd.concat([pitchers_normalized_numeric, pitchers_non_numeric.reset_index(drop=True)], axis=1)
     return pitchers_normalized_numeric
 
+# ----------------------
+# Data Type Fixer
+# ----------------------
 def load_and_fix_dtypes(df):
     """
     Converts columns of a DataFrame to the correct pandas dtypes.

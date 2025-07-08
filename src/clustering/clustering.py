@@ -1,16 +1,32 @@
+"""
+Performs clustering and value segmentation for baseball batters and pitchers.
+- Uses KMeans and PCA for clustering and visualization
+- Computes silhouette scores to select optimal cluster count
+- Saves cluster results and visualizations for dashboard use
+"""
+
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
+
+
+# Ensure project root is in sys.path for imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from src.data.clean_data import get_batters_df_normalized, get_pitchers_df_normalized, get_batters_df, get_pitchers_df
 
-
+# ----------------------
+# Silhouette Score Helper
+# ----------------------
 def compute_silhouette_scores(X, min_k=2, max_k=8, random_state=42):
+    """
+    Computes silhouette scores for KMeans clustering with k in [min_k, max_k].
+    Plots silhouette scores and returns best k.
+    """
     scores = []
     for k in range(min_k, max_k + 1):
         kmeans = KMeans(n_clusters=k, random_state=random_state)
@@ -28,8 +44,14 @@ def compute_silhouette_scores(X, min_k=2, max_k=8, random_state=42):
     print(f'Best number of clusters by silhouette score: {best_k}')
     return best_k, scores
 
-
+# ----------------------
+# Clustering and Visualization
+# ----------------------
 def cluster_and_visualize_value_segments(player_type='batters', n_clusters=None, random_state=42):
+    """
+    Performs KMeans clustering on normalized player data, labels clusters by value, and visualizes with PCA.
+    Saves cluster assignments and visualizations to disk.
+    """
     if player_type == 'batters':
         df_norm = get_batters_df_normalized()
         df_raw = get_batters_df()
@@ -101,6 +123,10 @@ def cluster_and_visualize_value_segments(player_type='batters', n_clusters=None,
     plt.title(f"{player_type.title()} Value Segments (PCA, Normalized, k={n_clusters})")
     plt.legend()
     plt.tight_layout()
+    # Save the figure as PNG
+    fig_path = f"reports/figures/{player_type}_value_segments.png"
+    plt.savefig(fig_path)
+    print(f"Saved cluster visualization to {fig_path}")
     plt.show()
     # Save results to CSV for dashboard use
     output_cols = ['fullName', 'value_label', 'value', 'salary']
@@ -110,7 +136,9 @@ def cluster_and_visualize_value_segments(player_type='batters', n_clusters=None,
     print(f"Saved value labels to {output_path}")
     return X
 
-
+# ----------------------
+# Main Entrypoint
+# ----------------------
 if __name__ == "__main__":
     print("Batters Clustering:")
     cluster_and_visualize_value_segments('batters')
