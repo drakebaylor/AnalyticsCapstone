@@ -102,6 +102,3 @@ predictions = batters_model.predict(batters.drop(columns=['b_war']))
 - `src/`: Modular Python code for reusable pipelines
 - `reports/`: Final report and figures
 
-## License
-*Add your license information here.*
-
