@@ -26,7 +26,7 @@ def load_data():
         url = f"https://www.baseball-reference.com/players/{last_name_parsed[0]}/{last_name_parsed}{first_name_parsed}01.shtml"
         response = requests.get(url)
         if "Page Not Found (404 error)" not in response.text:
-            with open(f'../data/raw/{player}.html', 'w+', encoding='utf-8') as f:
+            with open(f'data/raw/{player}.html', 'w+', encoding='utf-8') as f:
                 f.write(response.text)
                 f.close()
     
