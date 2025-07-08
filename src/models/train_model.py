@@ -25,7 +25,10 @@ from src.data.clean_data import get_batters_df_normalized, get_pitchers_df_norma
 def train_models():
     """
     Trains linear regression models for batters and pitchers WAR prediction.
-    Saves models to data/models/ directory.
+    Loads normalized numeric data, splits into train/test, fits models, and saves them to disk.
+    
+    Returns:
+        None. Models are saved to 'data/models/batters_model.joblib' and 'data/models/pitchers_model.joblib'.
     """
     # Load normalized numeric data
     batters_normalized_numeric = get_batters_df_normalized()

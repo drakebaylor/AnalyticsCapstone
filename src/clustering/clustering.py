@@ -26,6 +26,14 @@ def compute_silhouette_scores(X, min_k=2, max_k=8, random_state=42):
     """
     Computes silhouette scores for KMeans clustering with k in [min_k, max_k].
     Plots silhouette scores and returns best k.
+
+    Args:
+        X (np.ndarray or pd.DataFrame): Data to cluster.
+        min_k (int): Minimum number of clusters to try.
+        max_k (int): Maximum number of clusters to try.
+        random_state (int): Random seed for reproducibility.
+    Returns:
+        tuple: (best_k, scores) where best_k is the optimal number of clusters, scores is a list of silhouette scores.
     """
     scores = []
     for k in range(min_k, max_k + 1):
@@ -51,6 +59,13 @@ def cluster_and_visualize_value_segments(player_type='batters', n_clusters=None,
     """
     Performs KMeans clustering on normalized player data, labels clusters by value, and visualizes with PCA.
     Saves cluster assignments and visualizations to disk.
+
+    Args:
+        player_type (str): 'batters' or 'pitchers'.
+        n_clusters (int or None): Number of clusters. If None, silhouette score is used to select.
+        random_state (int): Random seed for reproducibility.
+    Returns:
+        pd.DataFrame: DataFrame with cluster assignments and value labels.
     """
     if player_type == 'batters':
         df_norm = get_batters_df_normalized()
@@ -80,18 +95,19 @@ def cluster_and_visualize_value_segments(player_type='batters', n_clusters=None,
     else:
         value = pd.Series(np.nan, index=df_raw.index)
     X['value'] = value
-    # Label clusters by mean value
-    cluster_means = X.groupby('cluster')['value'].mean().sort_values(ascending=True)
-    labels = {}
-    sorted_clusters = list(cluster_means.index)
-    for i, cluster in enumerate(sorted_clusters):
-        if i == 0:
-            labels[cluster] = "Overvalued"
-        elif i == n_clusters - 1:
-            labels[cluster] = "Undervalued"
+    
+    # Assign value_label on an individual basis
+    median_value = X['value'].median()
+    # Optionally, you can use quantiles for more granularity
+    def label_value(row):
+        if row['value'] > median_value:
+            return 'Undervalued'
+        elif row['value'] < median_value:
+            return 'Overvalued'
         else:
-            labels[cluster] = "Fairly Valued"
-    X['value_label'] = X['cluster'].map(labels)  # type: ignore
+            return 'Fairly Valued'
+    X['value_label'] = X.apply(label_value, axis=1)
+    
     # Add fullName for later identification (after clustering)
     if 'fullName' in df_raw.columns:
         X['fullName'] = df_raw['fullName']
@@ -108,7 +124,7 @@ def cluster_and_visualize_value_segments(player_type='batters', n_clusters=None,
     X_pca = pca.fit_transform(X[numeric_cols])
     # Visualization
     plt.figure(figsize=(10, 6))
-    colors = {"Overvalued": "red", "Fairly Valued": "gray", "Undervalued": "green"}
+    colors = {"Overvalued": "blue", "Fairly Valued": "gray", "Undervalued": "orange"}
     for label, color in colors.items():
         mask = X['value_label'] == label
         plt.scatter(

@@ -2,7 +2,7 @@
 Data cleaning and database creation for baseball player stats.
 - Parses raw HTML player files
 - Extracts salary, batting, and pitching stats
-- Saves processed data to SQLite database
+- Saves processed data to SQLite database and CSV
 - Provides functions to load and normalize dataframes
 """
 
@@ -17,7 +17,10 @@ from bs4 import BeautifulSoup
 # ----------------------
 def get_dataframes():
     """
-    Parses all HTML files in data/raw, extracts player stats and salary, and saves to SQLite DB.
+    Parses all HTML files in data/raw, extracts player stats and salary, and saves to SQLite DB and CSV files.
+    
+    Returns:
+        None. Saves processed data to 'data/processed/baseball_stats.db', 'batters.csv', and 'pitchers.csv'.
     """
     files = []
     path = 'data/raw'
@@ -195,6 +198,9 @@ def get_dataframes():
 def get_batters_df():
     """
     Loads batters table from SQLite database, drops 'year' column, and returns DataFrame.
+
+    Returns:
+        pd.DataFrame: Batters data with salary > 0, without the 'year' column.
     """
     conn = sqlite3.connect('data/processed/baseball_stats.db')
     batters_df = pd.read_sql_query("SELECT * FROM batters WHERE salary > 0", conn)
@@ -206,6 +212,9 @@ def get_batters_df():
 def get_pitchers_df():
     """
     Loads pitchers table from SQLite database, drops 'year' column, drops NA, and returns DataFrame.
+
+    Returns:
+        pd.DataFrame: Pitchers data with salary > 0, without the 'year' column, NA rows dropped.
     """
     conn = sqlite3.connect('data/processed/baseball_stats.db')
     pitchers_df = pd.read_sql_query("SELECT * FROM pitchers WHERE salary > 0", conn)
@@ -221,6 +230,9 @@ def get_pitchers_df():
 def get_batters_df_normalized():
     """
     Returns normalized numeric columns of batters DataFrame (min-max scaling).
+
+    Returns:
+        pd.DataFrame: Normalized numeric columns of batters data.
     """
     batters_df = get_batters_df()
     batters_numeric = batters_df.select_dtypes(include=['Int64', 'float'])
@@ -233,6 +245,9 @@ def get_batters_df_normalized():
 def get_pitchers_df_normalized():
     """
     Returns normalized numeric columns of pitchers DataFrame (min-max scaling).
+
+    Returns:
+        pd.DataFrame: Normalized numeric columns of pitchers data.
     """
     pitchers_df = get_pitchers_df()
     pitchers_numeric = pitchers_df.select_dtypes(include=['Int64', 'float'])
@@ -249,6 +264,11 @@ def load_and_fix_dtypes(df):
     """
     Converts columns of a DataFrame to the correct pandas dtypes.
     Uses pandas' convert_dtypes, but can be extended for manual overrides if needed.
+
+    Args:
+        df (pd.DataFrame): DataFrame to convert.
+    Returns:
+        pd.DataFrame: DataFrame with corrected dtypes.
     """
     # Use pandas' convert_dtypes for best-guess
     df = df.convert_dtypes()
