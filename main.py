@@ -23,6 +23,7 @@ STEPS = [
     ("gather", "python src/data/load_data.py"),
     ("clean", "python src/data/clean_data.py"),
     ("model", "python src/models/train_model.py"),
+    ("update_value_labels", "python src/models/get_predicted_war.py"),
     ("cluster", "python src/clustering/clustering.py"),
 ]
 
@@ -54,8 +55,9 @@ def main():
         steps_to_run.append(STEPS[1])
     if args.all or args.model:
         steps_to_run.append(STEPS[2])
+        steps_to_run.append(STEPS[3])  # update_value_labels after model
     if args.all or args.cluster:
-        steps_to_run.append(STEPS[3])
+        steps_to_run.append(STEPS[4])
 
     for name, cmd in steps_to_run:
         run_step(name, cmd)
